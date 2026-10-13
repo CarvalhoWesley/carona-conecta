@@ -1,7 +1,7 @@
 import { distKm, geocode, progress, reverseCity } from './lib/geo.js';
 import { corridorHubs, hubKey } from './lib/hubs.js';
 import { buildRoutes } from './lib/planner.js';
-import { loadHubs, loadSettings } from './lib/settings.js';
+import { LIMITS, loadHubs, loadSettings } from './lib/settings.js';
 import { CaptchaError, fetchSearch } from './lib/source-blablacar.js';
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -65,7 +65,11 @@ async function plan({ from, to, date, seats, hubs: manualHubs = [] }, port, job)
   };
   if (manual) {
     const total = manualPairs().length;
-    s = { ...s, maxLegs: Math.max(s.maxLegs, hubs.length + 1), maxSearches: Math.max(s.maxSearches, total) };
+    const maxSearches = Math.min(Math.max(s.maxSearches, total), LIMITS.maxSearches);
+    s = { ...s, maxLegs: Math.max(s.maxLegs, hubs.length + 1), maxSearches };
+    if (total > maxSearches) {
+      post({ type: 'notice', message: `Com ${hubs.length} paradas seriam ${total} consultas; o teto é ${LIMITS.maxSearches}. Os atalhos entre paradas distantes ficam de fora.` });
+    }
   }
   const planManual = async () => {
     for (const [a, b] of manualPairs()) await search(a, b);

@@ -3,6 +3,12 @@
 Extensão Chrome/Edge que combina caronas do BlaBlaCar em rotas com conexões
 (ex.: Batatais → Ribeirão Preto → Campinas → Boituva).
 
+> **Projeto independente, sem vínculo com o BlaBlaCar.** Feito para planejar as suas próprias viagens,
+> com a sua conta. As consultas são limitadas (no máximo 40 por busca, com pelo menos 3 s entre elas)
+> para manter o uso pessoal e em volume baixo, conforme os
+> [Termos e Condições do BlaBlaCar](https://legal.blablacar.com/pt-br/terms-and-conditions/)
+> (uso pessoal e não comercial; proibida a extração de parte substancial dos dados).
+
 ## Instalar
 1. Baixe o `carona-conecta-vX.Y.Z.zip` da [última release](https://github.com/CarvalhoWesley/carona-conecta/releases/latest).
 2. Descompacte numa pasta que não vá apagar (a extensão roda a partir dela).

@@ -1,7 +1,7 @@
 import { SORTS } from './lib/planner.js';
 import { geocode, normalize } from './lib/geo.js';
 import {
-  DEFAULTS, loadHubs, loadSavedRoutes, loadSettings, resetHubs, saveHubs, saveSavedRoutes, saveSettings,
+  clampSettings, DEFAULTS, loadHubs, loadSavedRoutes, loadSettings, resetHubs, saveHubs, saveSavedRoutes, saveSettings,
 } from './lib/settings.js';
 
 const $ = (id) => document.getElementById(id);
@@ -129,6 +129,7 @@ function onMessage(msg) {
       break;
     case 'routes': routes = msg.routes; render(); break;
     case 'warn': console.warn(msg.message); break;
+    case 'notice': showAlert(esc(msg.message)); break;
     case 'captcha':
       showAlert(`${esc(msg.message)} Resolva na aba aberta e clique em <b>Buscar rotas</b> de novo — os trechos já buscados ficam em cache.
         <br><button type="button" id="showTab" class="ghost">Abrir aba</button>`);
@@ -188,8 +189,8 @@ const HELP = {
   maxTransferKm: 'Distância entre onde você desce e onde pega a próxima carona. Em cidades grandes, aumente se aparecerem poucas rotas.',
   maxDetourPct: 'Quanto uma cidade de conexão pode alongar a viagem em relação ao caminho direto.',
   maxHubs: 'Quantas cidades de conexão são avaliadas. Mais cidades encontram mais rotas, mas gastam mais consultas.',
-  maxSearches: 'Limite de consultas ao BlaBlaCar por busca. Reduz o tempo total e o risco de CAPTCHA.',
-  delaySec: 'Intervalo entre as consultas: maior deixa a busca mais lenta, porém mais discreta para o site.',
+  maxSearches: 'Limite de consultas ao BlaBlaCar por busca. Reduz o tempo total e o risco de CAPTCHA. Máximo: 40.',
+  delaySec: 'Intervalo entre as consultas: maior deixa a busca mais lenta, porém mais discreta para o site. Mínimo: 3 s.',
 };
 
 // Para cada campo: botão de ajuda (i) com explicação e o valor padrão.
@@ -236,7 +237,7 @@ settingsForm.addEventListener('submit', async (e) => {
   const s = {};
   for (const k of Object.keys(DEFAULTS)) if (settingsForm[k]) s[k] = +settingsForm[k].value;
   s.maxDetour = +settingsForm.maxDetourPct.value / 100;
-  await saveSettings(s);
+  await saveSettings(clampSettings(s));
   $('settingsSaved').hidden = false;
 });
 

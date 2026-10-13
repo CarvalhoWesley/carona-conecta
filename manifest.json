@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Carona Conecta",
-  "version": "0.2.0",
-  "description": "Monta rotas com conexões entre caronas do BlaBlaCar.",
+  "version": "0.2.1",
+  "description": "Monta rotas com conexões entre caronas do BlaBlaCar. Projeto independente, não afiliado ao BlaBlaCar.",
   "permissions": ["sidePanel", "storage", "tabs", "scripting"],
   "host_permissions": [
     "https://www.blablacar.com.br/*",
