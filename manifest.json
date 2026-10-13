@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Carona Conecta",
+  "version": "0.1.0",
+  "description": "Monta rotas com conexões entre caronas do BlaBlaCar.",
+  "permissions": ["sidePanel", "storage", "tabs", "scripting"],
+  "host_permissions": [
+    "https://www.blablacar.com.br/*",
+    "https://nominatim.openstreetmap.org/*"
+  ],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": { "default_title": "Carona Conecta" }
+}

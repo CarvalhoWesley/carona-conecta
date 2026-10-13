@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Carona Conecta</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header><h1>Carona Conecta</h1><button id="toggleSettings" class="ghost" title="Configurações">⚙</button></header>
+
+  <form id="search">
+    <label>De <input name="from" required placeholder="Batatais"></label>
+    <label>Para <input name="to" required placeholder="Boituva"></label>
+    <div class="row">
+      <label>Data <input name="date" type="date" required></label>
+      <label>Lugares <input name="seats" type="number" min="1" max="4" value="1"></label>
+    </div>
+    <div class="row">
+      <button type="submit" id="go">Buscar rotas</button>
+      <button type="button" id="cancel" class="ghost" hidden>Parar</button>
+    </div>
+  </form>
+
+  <form id="settings" hidden>
+    <h2>Configurações</h2>
+    <label>Máx. trechos <input name="maxLegs" type="number" min="1" max="4"></label>
+    <label>Conexão mínima (min) <input name="minLayoverMin" type="number" min="0"></label>
+    <label>Espera máxima (min) <input name="maxWaitMin" type="number" min="10"></label>
+    <label>Distância desembarque→embarque (km) <input name="maxTransferKm" type="number" min="0" step="0.5"></label>
+    <label>Desvio máximo dos hubs (%) <input name="maxDetourPct" type="number" min="5" max="150"></label>
+    <label>Máx. hubs <input name="maxHubs" type="number" min="1" max="20"></label>
+    <label>Orçamento de buscas <input name="maxSearches" type="number" min="1" max="60"></label>
+    <label>Pausa entre buscas (s) <input name="delaySec" type="number" min="2" max="30"></label>
+    <div class="row"><button type="submit">Salvar</button><button type="button" id="resetSettings" class="ghost">Padrões</button></div>
+  </form>
+
+  <section id="status" hidden>
+    <progress id="bar" value="0" max="1"></progress>
+    <p id="statusText"></p>
+    <p id="hubs" class="muted"></p>
+    <div id="alert" class="alert" hidden></div>
+  </section>
+
+  <section id="results" hidden>
+    <div class="row between">
+      <strong id="count"></strong>
+      <select id="sort">
+        <option value="arrival">Chegada mais cedo</option>
+        <option value="price">Menor preço</option>
+        <option value="transfers">Menos conexões</option>
+      </select>
+    </div>
+    <ol id="routes"></ol>
+  </section>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>
