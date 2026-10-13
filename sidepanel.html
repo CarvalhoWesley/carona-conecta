@@ -9,24 +9,49 @@
   <div id="viewSearch">
   <header><h1>Carona Conecta</h1><button id="openSettings" class="icon" title="Configurações" aria-label="Configurações">⚙</button></header>
 
+  <nav id="savedBar" class="saved-bar" hidden aria-label="Rotas salvas">
+    <ul id="savedChips"></ul>
+    <button type="button" id="openManage" class="link">Gerenciar</button>
+  </nav>
+
   <form id="search">
-    <label>De <input name="from" required></label>
-    <label>Para <input name="to" required></label>
-    <div class="row">
+    <ol class="trip" aria-label="Trajeto">
+      <li class="stop end">
+        <span class="dot" aria-hidden="true"></span>
+        <input name="from" required aria-label="Origem" placeholder="Origem">
+        <button type="button" id="swap" class="icon small-icon" title="Inverter origem e destino" aria-label="Inverter origem e destino">⇅</button>
+      </li>
+      <li class="stop add" id="addStopRow">
+        <span class="dot ring" aria-hidden="true"></span>
+        <button type="button" id="addStopBtn" class="link">+ Adicionar parada</button>
+        <input id="stopInput" aria-label="Cidade de parada" placeholder="Cidade de parada" hidden>
+      </li>
+      <li class="stop end">
+        <span class="dot" aria-hidden="true"></span>
+        <input name="to" required aria-label="Destino" placeholder="Destino">
+        <span class="spacer" aria-hidden="true"></span>
+      </li>
+    </ol>
+    <p id="stopsHint" class="hint"></p>
+
+    <div class="row date-row">
       <label>Data <input name="date" type="date" required></label>
-      <label>Lugares <input name="seats" type="number" min="1" max="4" value="1"></label>
+      <label class="seats">Lugares <input name="seats" type="number" min="1" max="4" value="1"></label>
     </div>
-    <details id="advanced">
-      <summary>Modo avançado: escolher as cidades de conexão</summary>
-      <p class="muted">Se houver cidades aqui, a busca usa somente elas e ignora a lista das configurações.</p>
-      <div class="row">
-        <input id="advCity" aria-label="Cidade de conexão">
-        <button type="button" id="advAdd" class="ghost">Adicionar</button>
-      </div>
-      <ul id="advList" class="chips"></ul>
-    </details>
+
     <button type="submit" id="go">Buscar rotas</button>
     <button type="button" id="cancel" class="danger" hidden>Cancelar consultas</button>
+
+    <div class="save-row">
+      <button type="button" id="saveBtn" class="link"></button>
+      <button type="button" id="saveAsNew" class="link muted-link" hidden>Salvar como nova</button>
+    </div>
+    <div id="nameEditor" class="row name-editor" hidden>
+      <input id="routeName" aria-label="Nome da rota" maxlength="40" placeholder="Nome da rota">
+      <button type="button" id="nameOk" class="small">Salvar</button>
+      <button type="button" id="nameCancel" class="ghost small">Cancelar</button>
+    </div>
+    <p id="saveMsg" class="hint" hidden></p>
   </form>
 
   <section id="status" hidden>
@@ -62,7 +87,7 @@
     <label>Orçamento de buscas <input name="maxSearches" type="number" min="1" max="60"></label>
     <label>Pausa entre buscas (s) <input name="delaySec" type="number" min="2" max="30"></label>
     <div class="row"><button type="submit">Salvar</button><button type="button" id="resetSettings" class="ghost">Restaurar padrões</button></div>
-    <p id="saved" class="muted" hidden>Configurações salvas.</p>
+    <p id="settingsSaved" class="muted" hidden>Configurações salvas.</p>
   </form>
 
   <form id="hubForm">
@@ -78,6 +103,12 @@
     <p id="hubMsg" class="muted" hidden></p>
     <ul id="hubList" class="chips"></ul>
   </form>
+</div>
+
+<div id="viewManage" hidden>
+  <header><button id="closeManage" class="icon" title="Voltar" aria-label="Voltar">←</button><h1>Rotas salvas</h1><span></span></header>
+  <p class="muted">Toque numa rota na tela de busca para usá-la. Aqui você renomeia ou exclui.</p>
+  <ul id="manageList" class="manage-list"></ul>
 </div>
 
   <script type="module" src="sidepanel.js"></script>

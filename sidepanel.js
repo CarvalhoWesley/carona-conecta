@@ -1,6 +1,8 @@
 import { SORTS } from './lib/planner.js';
 import { geocode, normalize } from './lib/geo.js';
-import { DEFAULTS, loadHubs, loadSettings, resetHubs, saveHubs, saveSettings } from './lib/settings.js';
+import {
+  DEFAULTS, loadHubs, loadSavedRoutes, loadSettings, resetHubs, saveHubs, saveSavedRoutes, saveSettings,
+} from './lib/settings.js';
 
 const $ = (id) => document.getElementById(id);
 const searchForm = $('search');
@@ -17,48 +19,68 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(
 const tomorrow = new Date(Date.now() + 864e5);
 searchForm.date.value = tomorrow.toLocaleDateString('sv-SE');
 
-// Modo avançado: cidades de conexão escolhidas na própria consulta.
-let advCities = [];
+// Paradas (cidades de conexão escolhidas na consulta). Começam sempre vazias ao abrir o painel.
+let stops = [];
 
-function renderAdv() {
-  $('advList').innerHTML = advCities.map((c, i) =>
-    `<li>${esc(c)}<button type="button" data-adv-remove="${i}" aria-label="Remover ${esc(c)}">×</button></li>`).join('');
+function renderStops() {
+  for (const el of searchForm.querySelectorAll('.stop.mid')) el.remove();
+  const addRow = $('addStopRow');
+  stops.forEach((c, i) => addRow.insertAdjacentHTML('beforebegin', `<li class="stop mid">
+    <span class="dot ring" aria-hidden="true"></span><span class="name">${esc(c)}</span>
+    <button type="button" data-stop-remove="${i}" title="Remover parada" aria-label="Remover ${esc(c)}">×</button></li>`));
+  $('stopsHint').textContent = stops.length
+    ? 'A busca passa só pelas paradas que você escolheu, na ordem do caminho.'
+    : 'Sem paradas, a extensão escolhe as conexões sozinha.';
+  onTripChanged();
 }
 
-function addAdvCity() {
-  const name = $('advCity').value.trim();
-  if (name && !advCities.some((c) => normalize(c) === normalize(name))) advCities.push(name);
-  $('advCity').value = '';
-  renderAdv();
+function addStop() {
+  const name = $('stopInput').value.trim();
+  if (name && !stops.some((c) => normalize(c) === normalize(name))) stops.push(name);
+  $('stopInput').value = '';
+  renderStops();
 }
 
-$('advAdd').addEventListener('click', addAdvCity);
-$('advCity').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); addAdvCity(); } // Enter adiciona, não dispara a busca
+function showStopInput(show) {
+  $('stopInput').hidden = !show;
+  $('addStopBtn').hidden = show;
+  if (show) $('stopInput').focus();
+}
+
+$('addStopBtn').addEventListener('click', () => showStopInput(true));
+$('stopInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); addStop(); } // Enter adiciona, não dispara a busca
+  if (e.key === 'Escape') { $('stopInput').value = ''; $('stopInput').blur(); }
 });
-$('advList').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-adv-remove]');
-  if (btn) { advCities.splice(+btn.dataset.advRemove, 1); renderAdv(); }
+$('stopInput').addEventListener('blur', () => { addStop(); showStopInput(false); });
+searchForm.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-stop-remove]');
+  if (btn) { stops.splice(+btn.dataset.stopRemove, 1); renderStops(); }
 });
+$('swap').addEventListener('click', () => {
+  [searchForm.from.value, searchForm.to.value] = [searchForm.to.value, searchForm.from.value];
+  stops.reverse();
+  renderStops();
+});
+searchForm.from.addEventListener('input', () => onTripChanged());
+searchForm.to.addEventListener('input', () => onTripChanged());
 
 chrome.storage.local.get('lastQuery').then(({ lastQuery }) => {
   if (!lastQuery) return;
   searchForm.from.value = lastQuery.from;
   searchForm.to.value = lastQuery.to;
-  advCities = lastQuery.hubs || [];
-  $('advanced').open = advCities.length > 0;
-  renderAdv();
+  onTripChanged();
 });
 
 searchForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const f = new FormData(searchForm);
-  if ($('advCity').value.trim()) addAdvCity(); // cidade digitada sem clicar em Adicionar
+  if ($('stopInput').value.trim()) addStop(); // parada digitada e ainda não adicionada
   const query = {
     from: f.get('from').trim(), to: f.get('to').trim(), date: f.get('date'), seats: +f.get('seats') || 1,
-    hubs: [...advCities],
+    hubs: [...stops],
   };
-  chrome.storage.local.set({ lastQuery: query });
+  chrome.storage.local.set({ lastQuery: { from: query.from, to: query.to } });
   start(query);
 });
 
@@ -150,7 +172,7 @@ function routeHtml(r) {
 const showSettings = (show) => {
   $('viewSearch').hidden = show;
   $('viewSettings').hidden = !show;
-  $('saved').hidden = true;
+  $('settingsSaved').hidden = true;
 };
 $('openSettings').addEventListener('click', async () => {
   fillSettings(await loadSettings());
@@ -215,7 +237,7 @@ settingsForm.addEventListener('submit', async (e) => {
   for (const k of Object.keys(DEFAULTS)) if (settingsForm[k]) s[k] = +settingsForm[k].value;
   s.maxDetour = +settingsForm.maxDetourPct.value / 100;
   await saveSettings(s);
-  $('saved').hidden = false;
+  $('settingsSaved').hidden = false;
 });
 
 $('resetSettings').addEventListener('click', async () => {
@@ -278,3 +300,152 @@ $('resetHubs').addEventListener('click', async () => {
   renderHubs(await loadHubs());
   hubMessage('Lista padrão restaurada.');
 });
+
+// --- rotas salvas (origem, destino e paradas) ---
+let savedRoutes = [];
+let activeId = null; // rota salva aplicada no formulário
+let nameMode = false; // editor de nome aberto
+
+const currentTrip = () => ({ from: searchForm.from.value.trim(), to: searchForm.to.value.trim(), hubs: [...stops] });
+const activeRoute = () => savedRoutes.find((r) => r.id === activeId);
+const sameTrip = (a, b) => normalize(a.from) === normalize(b.from) && normalize(a.to) === normalize(b.to) &&
+  a.hubs.length === b.hubs.length && a.hubs.every((h, i) => normalize(h) === normalize(b.hubs[i]));
+const tripText = (r) => [r.from, ...r.hubs, r.to].join(' → ');
+const byName = (list) => [...list].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+function saveMessage(text) {
+  $('saveMsg').textContent = text;
+  $('saveMsg').hidden = !text;
+}
+
+// Atualiza a barra de rotas salvas e o botão de salvar conforme o formulário.
+function onTripChanged() {
+  $('savedBar').hidden = savedRoutes.length === 0;
+  $('savedChips').innerHTML = byName(savedRoutes).map((r) => `<li><button type="button" data-route="${esc(r.id)}"
+    aria-pressed="${r.id === activeId}" title="${esc(tripText(r))}">${esc(r.name)}</button></li>`).join('');
+
+  const active = activeRoute();
+  const trip = currentTrip();
+  const changed = active && !sameTrip(active, trip);
+  const btn = $('saveBtn');
+  btn.disabled = false;
+  if (!active) btn.textContent = '☆ Salvar esta rota';
+  else if (changed) btn.textContent = `Salvar alterações em “${active.name}”`;
+  else { btn.textContent = `★ Salva como “${active.name}”`; btn.disabled = true; }
+  $('saveAsNew').hidden = !changed;
+  btn.parentElement.hidden = nameMode || !trip.from || !trip.to;
+}
+
+$('savedChips').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-route]');
+  if (!btn) return;
+  saveMessage('');
+  if (btn.dataset.route === activeId) { activeId = null; onTripChanged(); return; } // segundo toque desmarca
+  const r = savedRoutes.find((x) => x.id === btn.dataset.route);
+  activeId = r.id;
+  searchForm.from.value = r.from;
+  searchForm.to.value = r.to;
+  stops = [...r.hubs];
+  renderStops();
+});
+
+const defaultName = () => `${searchForm.from.value.trim()} → ${searchForm.to.value.trim()}`;
+
+function openNameEditor() {
+  nameMode = true;
+  $('routeName').value = defaultName();
+  $('nameEditor').hidden = false;
+  onTripChanged();
+  $('routeName').select();
+}
+
+function closeNameEditor() {
+  nameMode = false;
+  $('nameEditor').hidden = true;
+  onTripChanged();
+}
+
+$('saveBtn').addEventListener('click', async () => {
+  const active = activeRoute();
+  if (!active) return openNameEditor();
+  savedRoutes = savedRoutes.map((x) => (x.id === active.id ? { ...x, ...currentTrip() } : x));
+  await saveSavedRoutes(savedRoutes);
+  saveMessage(`Alterações salvas em “${active.name}”.`);
+  onTripChanged();
+});
+$('saveAsNew').addEventListener('click', openNameEditor);
+
+$('nameOk').addEventListener('click', async () => {
+  const name = $('routeName').value.trim();
+  if (!name) return saveMessage('Dê um nome à rota.');
+  if (savedRoutes.some((x) => x.name.toLowerCase() === name.toLowerCase())) return saveMessage(`Já existe uma rota chamada “${name}”.`);
+  activeId = crypto.randomUUID();
+  savedRoutes = [...savedRoutes, { id: activeId, name, ...currentTrip() }];
+  await saveSavedRoutes(savedRoutes);
+  saveMessage(`Rota “${name}” salva.`);
+  closeNameEditor();
+});
+$('nameCancel').addEventListener('click', () => { saveMessage(''); closeNameEditor(); });
+$('routeName').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); $('nameOk').click(); }
+  if (e.key === 'Escape') $('nameCancel').click();
+});
+
+// --- tela de gerenciar rotas salvas ---
+let renamingId = null;
+
+function showManage(show) {
+  $('viewSearch').hidden = show;
+  $('viewManage').hidden = !show;
+  renamingId = null;
+  if (show) renderManage(); else onTripChanged();
+}
+
+function renderManage() {
+  const list = byName(savedRoutes);
+  $('manageList').innerHTML = list.length ? list.map((r) => `<li data-id="${esc(r.id)}">
+    <div class="title">${r.id === renamingId
+      ? `<input class="rename" value="${esc(r.name)}" maxlength="40" aria-label="Novo nome">
+         <button type="button" class="small" data-act="renameOk">Salvar</button>`
+      : `<span>${esc(r.name)}</span>`}</div>
+    <span class="muted">${esc(tripText(r))}</span>
+    <div class="actions">
+      <button type="button" class="link" data-act="rename">Renomear</button>
+      <button type="button" class="link danger-text" data-act="delete">Excluir</button>
+    </div></li>`).join('') : '<li class="muted">Nenhuma rota salva.</li>';
+  $('manageList').querySelector('.rename')?.select();
+}
+
+$('openManage').addEventListener('click', () => showManage(true));
+$('closeManage').addEventListener('click', () => showManage(false));
+
+$('manageList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const id = btn.closest('li').dataset.id;
+  if (btn.dataset.act === 'rename') { renamingId = id; renderManage(); return; }
+  if (btn.dataset.act === 'renameOk') {
+    const name = btn.closest('li').querySelector('.rename').value.trim();
+    if (!name || savedRoutes.some((x) => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) return;
+    savedRoutes = savedRoutes.map((x) => (x.id === id ? { ...x, name } : x));
+  } else if (btn.dataset.act === 'delete') {
+    if (!btn.dataset.confirm) { // segundo clique confirma
+      btn.dataset.confirm = '1';
+      btn.textContent = 'Confirmar exclusão';
+      setTimeout(() => { if (btn.isConnected) { delete btn.dataset.confirm; btn.textContent = 'Excluir'; } }, 3000);
+      return;
+    }
+    savedRoutes = savedRoutes.filter((x) => x.id !== id);
+    if (activeId === id) activeId = null;
+  }
+  renamingId = null;
+  await saveSavedRoutes(savedRoutes);
+  renderManage();
+});
+$('manageList').addEventListener('keydown', (e) => {
+  if (!e.target.matches('.rename')) return;
+  if (e.key === 'Enter') e.target.closest('li').querySelector('[data-act="renameOk"]').click();
+  if (e.key === 'Escape') { renamingId = null; renderManage(); }
+});
+
+loadSavedRoutes().then((list) => { savedRoutes = list; renderStops(); });
