@@ -38,7 +38,7 @@ function safePost(port, msg) {
 }
 
 async function plan({ from, to, date, seats, hubs: manualHubs = [] }, port, job) {
-  const s = await loadSettings();
+  let s = await loadSettings();
   const post = (m) => safePost(port, m);
 
   post({ type: 'status', label: 'Localizando cidades…' });
@@ -53,6 +53,23 @@ async function plan({ from, to, date, seats, hubs: manualHubs = [] }, port, job)
     ? await manualCorridor(manualHubs, origin, dest)
     : corridorHubs(origin, dest, s, await loadHubs());
   post({ type: 'hubs', hubs: hubs.map((h) => h.name), manual });
+
+  // Modo avançado: as cidades escolhidas formam a sequência da viagem (ordenadas pelo caminho).
+  // Permite trechos suficientes para passar por todas e busca todos os pares no sentido da viagem.
+  const manualPairs = () => {
+    const nodes = [origin, ...hubs, dest];
+    const pairs = [];
+    for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) pairs.push([nodes[i], nodes[j]]);
+    // Primeiro os pares consecutivos (a sequência informada), depois os atalhos.
+    return pairs.sort((x, y) => (nodes.indexOf(x[1]) - nodes.indexOf(x[0])) - (nodes.indexOf(y[1]) - nodes.indexOf(y[0])));
+  };
+  if (manual) {
+    const total = manualPairs().length;
+    s = { ...s, maxLegs: Math.max(s.maxLegs, hubs.length + 1), maxSearches: Math.max(s.maxSearches, total) };
+  }
+  const planManual = async () => {
+    for (const [a, b] of manualPairs()) await search(a, b);
+  };
 
   const segments = [];
   const results = new Map(); // "a>b" -> número de caronas
@@ -93,6 +110,12 @@ async function plan({ from, to, date, seats, hubs: manualHubs = [] }, port, job)
       return 0;
     }
   };
+
+  if (manual) {
+    await planManual();
+    post({ type: 'done', searches: used, cancelled: job.cancelled });
+    return;
+  }
 
   // a. direto
   await search(origin, dest);
