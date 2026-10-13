@@ -1,7 +1,7 @@
-import { distKm, geocode, reverseCity } from './lib/geo.js';
+import { distKm, geocode, progress, reverseCity } from './lib/geo.js';
 import { corridorHubs, hubKey } from './lib/hubs.js';
 import { buildRoutes } from './lib/planner.js';
-import { loadSettings } from './lib/settings.js';
+import { loadHubs, loadSettings } from './lib/settings.js';
 import { CaptchaError, fetchSearch } from './lib/source-blablacar.js';
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -16,23 +16,28 @@ chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'planner') return;
   port.onMessage.addListener((msg) => {
     if (msg.type === 'start') {
-      if (current) current.cancelled = true;
-      current = { cancelled: false };
+      if (current) cancel(current);
+      current = { cancelled: false, tabId: null };
       plan(msg.query, port, current).catch((e) => safePost(port, { type: 'error', message: e.message }));
     } else if (msg.type === 'cancel' && current) {
-      current.cancelled = true;
+      cancel(current);
     } else if (msg.type === 'showTab') {
       chrome.tabs.update(msg.tabId, { active: true });
     }
   });
-  port.onDisconnect.addListener(() => { if (current) current.cancelled = true; });
+  port.onDisconnect.addListener(() => { if (current) cancel(current); });
 });
+
+function cancel(job) {
+  job.cancelled = true;
+  if (job.tabId) chrome.tabs.remove(job.tabId).catch(() => {});
+}
 
 function safePost(port, msg) {
   try { port.postMessage(msg); } catch { /* painel fechado */ }
 }
 
-async function plan({ from, to, date, seats }, port, job) {
+async function plan({ from, to, date, seats, hubs: manualHubs = [] }, port, job) {
   const s = await loadSettings();
   const post = (m) => safePost(port, m);
 
@@ -42,8 +47,12 @@ async function plan({ from, to, date, seats }, port, job) {
   const oKey = hubKey(origin);
   const dKey = hubKey(dest);
 
-  const hubs = corridorHubs(origin, dest, s);
-  post({ type: 'hubs', hubs: hubs.map((h) => h.name) });
+  // Modo avançado: usa só as cidades informadas, sem filtro de desvio nem limite de hubs.
+  const manual = manualHubs.length > 0;
+  const hubs = manual
+    ? await manualCorridor(manualHubs, origin, dest)
+    : corridorHubs(origin, dest, s, await loadHubs());
+  post({ type: 'hubs', hubs: hubs.map((h) => h.name), manual });
 
   const segments = [];
   const results = new Map(); // "a>b" -> número de caronas
@@ -68,11 +77,13 @@ async function plan({ from, to, date, seats }, port, job) {
     used++;
     post({ type: 'progress', done: used - 1, total: s.maxSearches, label: `${a.name} → ${b.name}` });
     try {
-      const trips = await fetchSearch(a.name, b.name, date, seats);
+      const trips = await fetchSearch(a.name, b.name, date, seats, (id) => { job.tabId = id; });
       searchCache.set(cacheKey, { at: Date.now(), trips });
       return addTrips(a, b, k, trips);
     } catch (e) {
+      if (job.cancelled) return 0;
       if (e instanceof CaptchaError) {
+        job.tabId = null; // a aba do CAPTCHA fica aberta para o usuário
         job.cancelled = true;
         post({ type: 'captcha', tabId: e.tabId, message: e.message });
         return 0;
@@ -92,7 +103,7 @@ async function plan({ from, to, date, seats }, port, job) {
   // descoberta: pontos de chegada de caronas saindo da origem, no corredor e longe de hubs conhecidos
   const known = [origin, dest, ...hubs];
   const discovered = [];
-  for (const seg of segments.filter((x) => x.fromKey === oKey && x.toKey !== dKey)) {
+  for (const seg of manual ? [] : segments.filter((x) => x.fromKey === oKey && x.toKey !== dKey)) {
     if (discovered.length >= 2 || job.cancelled) break;
     if (known.some((k) => distKm(k, seg.arrCoord) < 15)) continue;
     const city = await reverseCity(seg.arrCoord).catch(() => null);
@@ -117,4 +128,16 @@ async function plan({ from, to, date, seats }, port, job) {
   }
 
   post({ type: 'done', searches: used, cancelled: job.cancelled });
+}
+
+async function manualCorridor(names, origin, dest) {
+  const keys = new Set([hubKey(origin), hubKey(dest)]);
+  const hubs = [];
+  for (const name of names) {
+    const place = await geocode(name); // erro "Cidade não encontrada" vai para o painel
+    if (keys.has(hubKey(place))) continue;
+    keys.add(hubKey(place));
+    hubs.push({ ...place, progress: progress(origin, place, dest) });
+  }
+  return hubs.sort((a, b) => a.progress - b.progress);
 }

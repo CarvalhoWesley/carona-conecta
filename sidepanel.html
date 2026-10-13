@@ -6,32 +6,27 @@
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
-  <header><h1>Carona Conecta</h1><button id="toggleSettings" class="ghost" title="Configurações">⚙</button></header>
+  <div id="viewSearch">
+  <header><h1>Carona Conecta</h1><button id="openSettings" class="icon" title="Configurações" aria-label="Configurações">⚙</button></header>
 
   <form id="search">
-    <label>De <input name="from" required placeholder="Batatais"></label>
-    <label>Para <input name="to" required placeholder="Boituva"></label>
+    <label>De <input name="from" required></label>
+    <label>Para <input name="to" required></label>
     <div class="row">
       <label>Data <input name="date" type="date" required></label>
       <label>Lugares <input name="seats" type="number" min="1" max="4" value="1"></label>
     </div>
-    <div class="row">
-      <button type="submit" id="go">Buscar rotas</button>
-      <button type="button" id="cancel" class="ghost" hidden>Parar</button>
-    </div>
-  </form>
-
-  <form id="settings" hidden>
-    <h2>Configurações</h2>
-    <label>Máx. trechos <input name="maxLegs" type="number" min="1" max="4"></label>
-    <label>Conexão mínima (min) <input name="minLayoverMin" type="number" min="0"></label>
-    <label>Espera máxima (min) <input name="maxWaitMin" type="number" min="10"></label>
-    <label>Distância desembarque→embarque (km) <input name="maxTransferKm" type="number" min="0" step="0.5"></label>
-    <label>Desvio máximo dos hubs (%) <input name="maxDetourPct" type="number" min="5" max="150"></label>
-    <label>Máx. hubs <input name="maxHubs" type="number" min="1" max="20"></label>
-    <label>Orçamento de buscas <input name="maxSearches" type="number" min="1" max="60"></label>
-    <label>Pausa entre buscas (s) <input name="delaySec" type="number" min="2" max="30"></label>
-    <div class="row"><button type="submit">Salvar</button><button type="button" id="resetSettings" class="ghost">Padrões</button></div>
+    <details id="advanced">
+      <summary>Modo avançado: escolher as cidades de conexão</summary>
+      <p class="muted">Se houver cidades aqui, a busca usa somente elas e ignora a lista das configurações.</p>
+      <div class="row">
+        <input id="advCity" aria-label="Cidade de conexão">
+        <button type="button" id="advAdd" class="ghost">Adicionar</button>
+      </div>
+      <ul id="advList" class="chips"></ul>
+    </details>
+    <button type="submit" id="go">Buscar rotas</button>
+    <button type="button" id="cancel" class="danger" hidden>Cancelar consultas</button>
   </form>
 
   <section id="status" hidden>
@@ -52,6 +47,38 @@
     </div>
     <ol id="routes"></ol>
   </section>
+
+</div>
+
+<div id="viewSettings" hidden>
+  <header><button id="closeSettings" class="icon" title="Voltar" aria-label="Voltar">←</button><h1>Configurações</h1><span></span></header>
+  <form id="settings">
+    <label>Máx. trechos <input name="maxLegs" type="number" min="1" max="4"></label>
+    <label>Conexão mínima (min) <input name="minLayoverMin" type="number" min="0"></label>
+    <label>Espera máxima (min) <input name="maxWaitMin" type="number" min="10"></label>
+    <label>Distância desembarque→embarque (km) <input name="maxTransferKm" type="number" min="0" step="0.5"></label>
+    <label>Desvio máximo dos hubs (%) <input name="maxDetourPct" type="number" min="5" max="150"></label>
+    <label>Máx. hubs <input name="maxHubs" type="number" min="1" max="20"></label>
+    <label>Orçamento de buscas <input name="maxSearches" type="number" min="1" max="60"></label>
+    <label>Pausa entre buscas (s) <input name="delaySec" type="number" min="2" max="30"></label>
+    <div class="row"><button type="submit">Salvar</button><button type="button" id="resetSettings" class="ghost">Restaurar padrões</button></div>
+    <p id="saved" class="muted" hidden>Configurações salvas.</p>
+  </form>
+
+  <form id="hubForm">
+    <div class="row between">
+      <h2>Cidades de conexão <span id="hubCount" class="muted"></span></h2>
+      <button type="button" id="resetHubs" class="ghost small">Restaurar lista</button>
+    </div>
+    <p class="muted">Cidades que a extensão pode usar como conexão. ★ = polo grande, ganha prioridade na escolha.</p>
+    <div class="row">
+      <input name="city" aria-label="Nova cidade" required>
+      <button type="submit" id="addHub">Adicionar</button>
+    </div>
+    <p id="hubMsg" class="muted" hidden></p>
+    <ul id="hubList" class="chips"></ul>
+  </form>
+</div>
 
   <script type="module" src="sidepanel.js"></script>
 </body>
